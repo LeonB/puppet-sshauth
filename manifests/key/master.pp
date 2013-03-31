@@ -9,11 +9,12 @@ define sshauth::key::master ($ensure,
 														 $keytype,
 														 $length,
 														 $maxdays,
-														 $mindate) {
+														 $mindate,
+														 $key) {
 	include sshauth::params
-	
+
 	Exec { path => '/usr/bin:/usr/sbin:/bin:/sbin' }
-	
+
 	File {
 		owner => 'puppet',
 		group => 'puppet',
@@ -27,11 +28,7 @@ define sshauth::key::master ($ensure,
 		ensure => directory,
 		mode   => '0644',
 	}
-	
-	file { $keyfile:
-		ensure => $ensure,
-	}
-	
+
 	file { "${keyfile}.pub":
 		ensure => $ensure,
 		mode   => '0644',
@@ -47,15 +44,15 @@ define sshauth::key::master ($ensure,
 			if $force {
         $reason = 'force=true'
 			}
-			
+
 			if !$reason and $mindate and generate('/usr/bin/find', $keyfile, '!', '-newermt', "${mindate}") {
 				$reason = "created before ${mindate}"
 			}
-			
+
 			if !$reason and $maxdays and generate('/usr/bin/find', $keyfile, '-mtime', "+${maxdays}") {
 				$reason = "older than ${maxdays} days"
 			}
-			
+
 			if !$reason and $keycontent =~ /^ssh-... [^ ]+ (...) (\d+)$/ {
 				if $keytype != $1 {
 					$reason = "keytype changed: $1 -> ${keytype}"
@@ -65,7 +62,7 @@ define sshauth::key::master ($ensure,
 					}
 				}
 			}
-			
+
 			if $reason {
 				exec { "Revoke previous key ${name}: ${reason}":
 					command => "rm ${keyfile} ${keyfile}.pub",
@@ -74,18 +71,32 @@ define sshauth::key::master ($ensure,
 			}
 		}
 
-		# Create the key pair.
-		# We "repurpose" the comment field in public keys on the keymaster to
-		# store data about the key, i.e. $keytype and $length.  This avoids
-		# having to rerun ssh-keygen -l on every key at every run to determine
-		# the key length.
-		exec { "Create key ${name}: ${keytype}, ${length} bits":
-			command => "ssh-keygen -t ${keytype} -b ${length} -f ${keyfile} -C \"${keytype} ${length}\" -N \"\"",
-			user    => 'puppet',
-			group   => 'puppet',
-			creates => $keyfile,
-			before  => [ File[$keyfile], File["${keyfile}.pub"] ],
-			require => File[$keydir],
+		if !$key {
+			file { $keyfile:
+				ensure => $ensure,
+			}
+
+			# Create the key pair.
+			# We "repurpose" the comment field in public keys on the keymaster to
+			# store data about the key, i.e. $keytype and $length.  This avoids
+			# having to rerun ssh-keygen -l on every key at every run to determine
+			# the key length.
+			exec { "Create key ${name}: ${keytype}, ${length} bits":
+				command => "ssh-keygen -t ${keytype} -b ${length} -f ${keyfile} -C \"${keytype} ${length}\" -N \"\"",
+				user    => 'puppet',
+				group   => 'puppet',
+				creates => $keyfile,
+				before  => [ File[$keyfile], File["${keyfile}.pub"] ],
+				require => File[$keydir],
+			}
+		} else {
+			file { $keyfile:
+				content => $key,
+				owner   => 'puppet',
+				group   => 'puppet',
+				before  => [ File[$keyfile], File["${keyfile}.pub"] ],
+				require => File[$keydir],
+			}
 		}
 	} # if $ensure  == "present"
 }

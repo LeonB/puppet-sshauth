@@ -22,7 +22,8 @@ define sshauth::key ($ensure   = present,
 										 $mindate  = '',
 										 $options  = '',
 										 $user     = '',
-										 $managed  = false) {
+										 $managed  = false,
+										 $key      = undef) {
 	sshauth::key::namecheck { "${name}-name":
 		parm  => 'name',
 		value => $name,
@@ -33,17 +34,17 @@ define sshauth::key ($ensure   = present,
 		''      => "id_${keytype}",
 		default => $filename,
 	}
-	
+
 	$_length = $keytype ? {
 		'rsa' => $length,
 		'dsa' => '1024',
 	}
-	
+
 	$_user = $user ? {
 		''      => regsubst($name, '^([^@]*)@?.*$', '\1'),
 		default => $user,
 	}
-	
+
 	$_home = $home ? {
 		''      => "/home/${_user}",
 		default => $home,
@@ -61,6 +62,7 @@ define sshauth::key ($ensure   = present,
 		length  => $_length,
 		maxdays => $maxdays,
 		mindate => $mindate,
+		key     => $key,
 		tag     => $name,
 	}
 
